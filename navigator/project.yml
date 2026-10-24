@@ -43,6 +43,9 @@ targets:
     dependencies:
       - package: EmberNavigator
         product: EmberCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   EmberNavigator:
     build:
