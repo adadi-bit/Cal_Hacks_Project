@@ -2,7 +2,7 @@
 
     python engine/vision_pass.py --county paradise [--top 40]
 
-Needs ANTHROPIC_API_KEY (env or repo-root .env). Model: claude-sonnet-4-5, override with EMBER_CLAUDE_MODEL.
+Needs ANTHROPIC_API_KEY (env or repo-root .env). Model: claude-sonnet-4-6, override with EMBER_CLAUDE_MODEL.
 """
 import argparse
 import sys

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import scoring, util
 
-DEFAULT_MODEL = "claude-sonnet-4-5"
+DEFAULT_MODEL = "claude-sonnet-4-6"
 TOP_N = 40
 REASON_MAX = 200
 SYSTEM_PROMPT = ("You assess wildfire refuge candidates for people in wheelchairs. Report only what is visible. "

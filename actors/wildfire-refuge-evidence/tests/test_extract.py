@@ -51,7 +51,7 @@ def test_extractor_request_shape(monkeypatch):
     ex = Extractor(client=fake)
     places = asyncio.run(ex.extract("Camp Fire", 2018, "T", "ARTICLE-KMART body"))
     call = fake.messages.calls[0]
-    assert call["model"] == "claude-sonnet-4-5"
+    assert call["model"] == "claude-sonnet-4-6"
     assert call["output_config"] == {"format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}}
     content = call["messages"][0]["content"]
     assert content.startswith(PROMPT) and "Camp Fire (2018)" in content and "ARTICLE-KMART body" in content

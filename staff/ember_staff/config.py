@@ -54,7 +54,7 @@ def feed_cache_path():
 
 
 def claude_model():
-    return env("EMBER_CLAUDE_MODEL", "claude-sonnet-4-5")
+    return env("EMBER_CLAUDE_MODEL", "claude-sonnet-4-6")
 
 
 def alert_line():
