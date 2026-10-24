@@ -57,7 +57,7 @@ public enum VoiceCommand: Sendable, Equatable {
 
 /// Claude Job 3: free speech -> one tool call. Only used with signal; any failure returns nil (caller falls back).
 public struct VoiceAgent: Sendable {
-    public static let model = "claude-sonnet-4-5"
+    public static let model = "claude-sonnet-4-6"
     public static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     public static let timeoutS = 2.0
     public static let systemPrompt = "You help a person evacuating a wildfire in a wheelchair, or the person pushing them. Map what they say to one tool call. Never give directions yourself; the router does that. If unsure, ask one short question."

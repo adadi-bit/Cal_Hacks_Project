@@ -9,7 +9,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "claude-sonnet-4-5"  # spec; override with env EMBER_CLAUDE_MODEL
+DEFAULT_MODEL = "claude-sonnet-4-6"  # spec; override with env EMBER_CLAUDE_MODEL
 
 # Exact prompt from the Ember spec (Apify track). Do not edit.
 PROMPT = (

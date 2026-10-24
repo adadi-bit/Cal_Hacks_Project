@@ -59,7 +59,7 @@ For a fast, cheap sample (about 30 seconds of extraction), set `"max_pages": 10`
    `"<fire_name>" survived OR sheltered OR "took refuge"`.
 3. **Article bodies.** It calls **[apify/website-content-crawler](https://apify.com/apify/website-content-crawler)** on the result URLs, at depth 0 (only those pages) with robots.txt respected.
 4. **Reddit.** It calls **[trudax/reddit-scraper-lite](https://apify.com/trudax/reddit-scraper-lite)**, searching posts for the fire name. It keeps only the post title and body, never the username.
-5. **Extraction.** Each page body goes to Claude (`claude-sonnet-4-5` by default; override with env `EMBER_CLAUDE_MODEL`) with structured output and this exact prompt:
+5. **Extraction.** Each page body goes to Claude (`claude-sonnet-4-6` by default; override with env `EMBER_CLAUDE_MODEL`) with structured output and this exact prompt:
    *"Extract places where people sheltered during this fire and survived. Return only places named in the text."*
    The schema is `[{place, kind, quote ≤ 240 chars, people_count_hint?}]`. Every item is validated: unknown kinds become `other`, long quotes are truncated to 240 characters, and malformed items are dropped.
 6. **Privacy pass.** Person names are removed from every quote (see the privacy rule above).
@@ -119,7 +119,7 @@ One dataset item (a GeoJSON Feature):
     "news_results": 2, "articles": 2, "reddit_posts": 1, "documents": 3,
     "extracted_places": 6, "extract_errors": 0, "dropped_private_places": 1,
     "not_geocoded": 0, "outside_50km": 1, "nominatim_requests": 6,
-    "name_stripping": "spacy", "model": "claude-sonnet-4-5"
+    "name_stripping": "spacy", "model": "claude-sonnet-4-6"
   },
   "errors": []
 }

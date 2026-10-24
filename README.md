@@ -55,10 +55,10 @@ Claude sits beside the deterministic core, never in its path. Remove the key and
 
 | Job | Model | Where | Rule enforced in code |
 |---|---|---|---|
-| Refuge vision pass | `claude-sonnet-4-5` (vision) | [engine/vision_pass.py](engine/vision_pass.py) | `score -= 10 × fuel_ring`; `entry_wheelchair == "no"` sets `f_access = 0`; `confidence < 0.5` sets `flag = "unsure"`; no path raises a score |
-| Plan writer + back-translation | `claude-sonnet-4-5` | [staff/ember_staff/plan_writer.py](staff/ember_staff/plan_writer.py) | Names and numbers are injected into `{placeholders}` by code; any digit, unknown or missing placeholder is rejected; the back-translation diff flags dropped negations and changed digits; print is blocked until a human stamps the card |
-| Voice agent | `claude-sonnet-4-5` + tool use | [navigator/Sources/EmberCore/VoiceAgent.swift](navigator/Sources/EmberCore/VoiceAgent.swift) | `block_edge` / `set_profile` / `reroute` are read back and run only after an on-device "yes"; after 2 s or on any error, the on-device intents take over |
-| Survivor-evidence extraction | `claude-sonnet-4-5` | [actors/wildfire-refuge-evidence](actors/wildfire-refuge-evidence) | Only places named in the text; person names stripped before storage |
+| Refuge vision pass | `claude-sonnet-4-6` (vision) | [engine/vision_pass.py](engine/vision_pass.py) | `score -= 10 × fuel_ring`; `entry_wheelchair == "no"` sets `f_access = 0`; `confidence < 0.5` sets `flag = "unsure"`; no path raises a score |
+| Plan writer + back-translation | `claude-sonnet-4-6` | [staff/ember_staff/plan_writer.py](staff/ember_staff/plan_writer.py) | Names and numbers are injected into `{placeholders}` by code; any digit, unknown or missing placeholder is rejected; the back-translation diff flags dropped negations and changed digits; print is blocked until a human stamps the card |
+| Voice agent | `claude-sonnet-4-6` + tool use | [navigator/Sources/EmberCore/VoiceAgent.swift](navigator/Sources/EmberCore/VoiceAgent.swift) | `block_edge` / `set_profile` / `reroute` are read back and run only after an on-device "yes"; after 2 s or on any error, the on-device intents take over |
+| Survivor-evidence extraction | `claude-sonnet-4-6` | [actors/wildfire-refuge-evidence](actors/wildfire-refuge-evidence) | Only places named in the text; person names stripped before storage |
 
 | Where Claude could hurt someone | What we built |
 |---|---|
@@ -69,7 +69,7 @@ Claude sits beside the deterministic core, never in its path. Remove the key and
 | API slow or down in smoke | Router never waits; on-device fallback in 2 s |
 | Two things it is not allowed to do | Decide a refuge is safe; print unreviewed instructions for a cognition-flagged client |
 
-`EMBER_CLAUDE_MODEL` overrides the model everywhere. `claude-sonnet-4-5` is the model the spec names, but it retires on 2026-11-30, so switch before then.
+`EMBER_CLAUDE_MODEL` overrides the model everywhere. The spec names `claude-sonnet-4-5`, but that model is no longer served on current keys (404), so the default is `claude-sonnet-4-6`; the fallbacks cover any future retirement.
 
 Office-hours question: how to evaluate the plan writer on real clients safely.
 
