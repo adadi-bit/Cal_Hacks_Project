@@ -1,0 +1,257 @@
+{
+ "description": "Major Northern California wildfires 2017-2025 (>= ~37k acres or Butte County), used for the historical fire-direction prior and refuge/corridor history terms. Ignition points: NIFC WFIGS (2020+) and CAL FIRE incident pages (2017-2019). Perimeters themselves come from CAL FIRE FRAP at bundle build (perimeters.json).",
+ "fires": [
+  {
+   "name": "Tubbs",
+   "county": "Sonoma",
+   "acres": 36807,
+   "ignition": [
+    38.609,
+    -122.6228
+   ],
+   "discovered": "2017-10-08",
+   "wind": "NE Diablo wind, gusts 60+ mph; spread SW into Santa Rosa overnight",
+   "source": "CAL FIRE incident page https://www.fire.ca.gov/incidents/2017/10/8/tubbs-fire (origin Bennett Lane, Calistoga); not fetched live, entered 2026-10-24"
+  },
+  {
+   "name": "Carr",
+   "county": "Shasta",
+   "acres": 229651,
+   "ignition": [
+    40.6543,
+    -122.6236
+   ],
+   "discovered": "2018-07-23",
+   "wind": "westerly; fire whirl into Redding 2018-07-26",
+   "source": "CAL FIRE incident page https://www.fire.ca.gov/incidents/2018/7/23/carr-fire (origin Hwy 299 at Carr Powerhouse Rd); not fetched live"
+  },
+  {
+   "name": "Camp",
+   "county": "Butte",
+   "acres": 153336,
+   "ignition": [
+    39.8103,
+    -121.4347
+   ],
+   "discovered": "2018-11-08",
+   "wind": "NE Jarbo Gap wind 30-50 mph; fire ran SW from Pulga through Concow into Paradise within ~3 h",
+   "source": "CAL FIRE incident page https://www.fire.ca.gov/incidents/2018/11/8/camp-fire (origin Camp Creek Rd near Pulga; CAL FIRE/Butte County DA investigation 2020); not fetched live"
+  },
+  {
+   "name": "Kincade",
+   "county": "Sonoma",
+   "acres": 77758,
+   "ignition": [
+    38.7925,
+    -122.7803
+   ],
+   "discovered": "2019-10-23",
+   "wind": "NE wind gusts 90+ mph on 2019-10-27; spread SW toward Healdsburg/Windsor",
+   "source": "CAL FIRE incident page https://www.fire.ca.gov/incidents/2019/10/23/kincade-fire (origin Burned Mountain Rd, Geyserville); not fetched live"
+  },
+  {
+   "name": "Loyalton",
+   "county": "Sierra",
+   "acres": 47029,
+   "ignition": [
+    39.68143,
+    -120.1713
+   ],
+   "discovered": "2020-08-14",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": ""
+  },
+  {
+   "name": "Doe",
+   "county": "Glenn",
+   "acres": 589368,
+   "ignition": [
+    39.76536,
+    -122.6734
+   ],
+   "discovered": "2020-08-16",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": "August Complex (Doe/Glade/Hull)"
+  },
+  {
+   "name": "Wallbridge",
+   "county": "Sonoma",
+   "acres": 55209,
+   "ignition": [
+    38.67282,
+    -123.07802
+   ],
+   "discovered": "2020-08-17",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": ""
+  },
+  {
+   "name": "Hennessey",
+   "county": "Napa",
+   "acres": 305651,
+   "ignition": [
+    38.50247,
+    -122.34081
+   ],
+   "discovered": "2020-08-17",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": "LNU Lightning Complex"
+  },
+  {
+   "name": "Claremont",
+   "county": "Plumas",
+   "acres": 318776,
+   "ignition": [
+    39.88496,
+    -120.9423
+   ],
+   "discovered": "2020-08-17",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": "North Complex (Bear/Claremont): E wind run SW into Berry Creek 2020-09-08"
+  },
+  {
+   "name": "Shf Elkhorn",
+   "county": "Tehama",
+   "acres": 51577,
+   "ignition": [
+    40.14235,
+    -123.0594
+   ],
+   "discovered": "2020-08-18",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": ""
+  },
+  {
+   "name": "Hopkins",
+   "county": "Trinity",
+   "acres": 328363,
+   "ignition": [
+    40.12551,
+    -123.0731
+   ],
+   "discovered": "2020-08-18",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": "August Complex"
+  },
+  {
+   "name": "Zogg",
+   "county": "Shasta",
+   "acres": 56338,
+   "ignition": [
+    40.5412,
+    -122.56831
+   ],
+   "discovered": "2020-09-27",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": ""
+  },
+  {
+   "name": "Glass",
+   "county": "Napa",
+   "acres": 67484,
+   "ignition": [
+    38.55431,
+    -122.53096
+   ],
+   "discovered": "2020-09-27",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": ""
+  },
+  {
+   "name": "Sugar",
+   "county": "Plumas",
+   "acres": 105076,
+   "ignition": [
+    39.83203,
+    -120.3415
+   ],
+   "discovered": "2021-07-02",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": ""
+  },
+  {
+   "name": "Tamarack",
+   "county": "Alpine",
+   "acres": 68637,
+   "ignition": [
+    38.6314,
+    -119.9115
+   ],
+   "discovered": "2021-07-04",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": ""
+  },
+  {
+   "name": "Dixie",
+   "county": "Plumas",
+   "acres": 963309,
+   "ignition": [
+    39.876,
+    -121.37883
+   ],
+   "discovered": "2021-07-14",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": "Feather River canyon NE of Paradise; spread N/NE for weeks"
+  },
+  {
+   "name": "Mcfarland",
+   "county": "Shasta",
+   "acres": 122653,
+   "ignition": [
+    40.31848,
+    -123.0374
+   ],
+   "discovered": "2021-07-30",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": ""
+  },
+  {
+   "name": "Monument",
+   "county": "Trinity",
+   "acres": 223124,
+   "ignition": [
+    40.75228,
+    -123.3367
+   ],
+   "discovered": "2021-07-31",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": ""
+  },
+  {
+   "name": "Caldor",
+   "county": "El Dorado",
+   "acres": 221835,
+   "ignition": [
+    38.62717,
+    -120.48929
+   ],
+   "discovered": "2021-08-15",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": ""
+  },
+  {
+   "name": "Mosquito",
+   "county": "Placer",
+   "acres": 76788,
+   "ignition": [
+    39.00122,
+    -120.7246
+   ],
+   "discovered": "2022-09-07",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": "Placer/El Dorado 2022"
+  },
+  {
+   "name": "Park",
+   "county": "Butte",
+   "acres": 429603,
+   "ignition": [
+    39.81858,
+    -121.8026
+   ],
+   "discovered": "2024-07-24",
+   "source": "NIFC WFIGS Interagency Fire Perimeters (services3.arcgis.com/T4QMspbfLg3qTGWY, attr_InitialLatitude/Longitude), fetched 2026-10-24",
+   "wind": "ignited in Upper Bidwell Park, Chico; ran NE through Cohasset toward Forest Ranch"
+  }
+ ]
+}

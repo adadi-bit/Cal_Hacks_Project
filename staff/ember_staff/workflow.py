@@ -26,7 +26,14 @@ def run_engine(cid, use_claude=True):
     text = plan_writer.generate(row["profile"], plan, selected, use_claude=use_claude)
     db.update(cid, plan=plan, plan_error=None, selected=selected, text=text)
     db.clear_stamp(cid)
-    return db.get(cid)
+    row = db.get(cid)
+    # The bundle's plans/<id>.json is the single source the card QR (refuge_ids) and the phone both follow; write it
+    # as soon as a plan exists so a re-run can never leave the phone on an older plan than the card.
+    try:
+        write_plan_file(row)
+    except OSError:
+        pass
+    return row
 
 
 def run_all(include_stamped=False):

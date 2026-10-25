@@ -36,6 +36,10 @@
   {% endif %}
   · CSV columns: <a href="/sample_registry.csv">sample_registry.csv</a>
 </p>
+<label class="muted" style="font-weight:400;display:block;margin:6px 0">Find
+  <input id="find" type="search" placeholder="name, address, zone, status" aria-label="Filter the client list" style="min-width:18em"
+         oninput="for(const tr of document.querySelectorAll('table.grid tbody tr')){tr.hidden=!tr.textContent.toLowerCase().includes(this.value.toLowerCase())}">
+</label>
 <table class="grid">
   <thead><tr><th>Name</th><th>Address</th><th>Mobility</th><th>Devices</th><th>Card</th><th>Past fires</th><th>Last reviewed</th><th>Zone</th><th>Outage</th><th></th></tr></thead>
   <tbody>

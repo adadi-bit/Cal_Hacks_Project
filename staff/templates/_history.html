@@ -8,7 +8,7 @@
   {% for r in hist.routes %}
   <li><b>{{ r.which }}. {{ r.name }}</b>:
     {% if r.route_fires %}route inside {{ r.route_fires|join(', ') }}{% else %}route outside every recorded perimeter{% endif %};
-    refuge {% if r.recent %}<span class="warn">ranked down ×{{ r.factor }}</span> (inside {{ r.recent }} fire{{ 's' if r.recent != 1 }} since 2017: {{ r.refuge_fires|join(', ') }}){% else %}never inside a recent perimeter (×{{ r.factor }}){% endif %}.</li>
+    refuge {% if r.recent and not r.scored %}<span class="warn">inside a past fire, not ranked down</span> (every refuge here burned alike, so history is reported, not scored; inside{% elif r.recent %}<span class="warn">ranked down ×{{ r.factor }}</span> (inside {{ r.recent }} fire{{ 's' if r.recent != 1 }} since 2017: {{ r.refuge_fires|join(', ') }}){% else %}never inside a recent perimeter (×{{ r.factor }}){% endif %}.</li>
   {% endfor %}
   {% if hist.both_cut %}<li class="needs">Both routes run through a recent perimeter. Normal for a town that burned whole (Camp 2018); confirm the refuge is a large paved lot and keep the phone's "New fire" reroute in mind.</li>{% endif %}
   {% if hist.prior_word %}<li>Without live fire data the phone assumes fire from the <b>{{ hist.prior_word }}</b> ({{ hist.prior_bearing_deg }}°), from {% for f in hist.prior_from %}{{ f.fire }} ({{ f.bearing_deg }}°){% if not loop.last %}, {% endif %}{% endfor %}.</li>{% endif %}

@@ -65,3 +65,24 @@ import Foundation
         #expect(FollowCamera.overviewSpanM(points: [pts[0]], aspect: 1) >= 40)
     }
 }
+
+@Suite struct CourseEstimatorTests {
+    @Test func jitterIsNotADirectionAndMovesAreSmoothed() {
+        var c = CourseEstimator()
+        let home = (lat: 39.748562, lon: -121.615275)
+        c.add(lat: home.lat, lon: home.lon)
+        #expect(c.heading == nil)
+        let jitter = FollowCamera.destination(lat: home.lat, lon: home.lon, bearingDeg: 200, distanceM: 2)
+        c.add(lat: jitter.lat, lon: jitter.lon)
+        #expect(c.heading == nil, "2 m of GPS jitter is not a direction")
+        let e1 = FollowCamera.destination(lat: home.lat, lon: home.lon, bearingDeg: 90, distanceM: 20)
+        c.add(lat: e1.lat, lon: e1.lon)
+        #expect(abs(Geo.angdiff(c.heading ?? -1, 90)) < 1)
+        let n1 = FollowCamera.destination(lat: e1.lat, lon: e1.lon, bearingDeg: 0, distanceM: 20)
+        c.add(lat: n1.lat, lon: n1.lon)
+        let h = c.heading ?? -1
+        #expect(h > 30 && h < 60, "a right-angle turn is taken half way per fix (smoothing 0.5): \(h)")
+        c.reset()
+        #expect(c.heading == nil)
+    }
+}

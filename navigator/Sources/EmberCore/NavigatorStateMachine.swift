@@ -25,6 +25,63 @@ public final class NavigatorStateMachine {
     public static let noRoute = "No route. Stay where you are. Start the shelter steps."
     public static let sayAgain = "Say again?"
     public static let fireAhead = "Fire ahead. Turning away from it."
+    public static let cardMismatch = "This card does not match the phone's plan. Ask staff for a new card."
+    public static let noCompassReport = "No compass. Using the last fire report."
+    public static let noCompassHistory = "No compass. Using where past fires came from."
+    public static let noCompassAhead = "No compass. Treating the fire as straight ahead. Turning away from it."
+    // v2 (engineer #2): spoken leads for "Skip"/"Not sure" and the shelter's last step; v1 (engineer #1): the picker prompts.
+    public static let lastReport = "Using the last fire report."
+    public static let noFireInfo = "No fire information. Showing the nearest safe places."
+    public static let shelterLast = "That is the last step. Stay in the room and keep the phone on."
+    public static let whichWaySmoke = "Which way is the smoke?"
+    public static let whichWayNewFire = "Which way is the new fire?"
+    // Confirm step (round 2, all five found the mis-tap risk): a tap on Blocked / New fire / Start over asks first.
+    public static let rerouteQuestion = "Find a new route? Say yes to reroute."
+    public static let fireAheadQuestion = "Fire ahead. Turning away from it. Say yes to reroute."
+    public static let startOverQuestion = "Stop and go back to the start? Say yes to stop."
+    public static let okay = "Okay."
+
+    /// What a tapped button is waiting to do until the person answers Yes / No.
+    public enum Pending: Equatable, Sendable { case blocked, fireAhead(heading: Double?), newFireNoCompass, startOver }
+    public private(set) var pending: Pending?
+
+    /// "Blocked" tapped: ask before throwing the route away (one mis-tap doubled Harold's trip).
+    public func requestBlocked() {
+        guard state == .navigate else { return }
+        pending = .blocked
+        say(NavigatorStateMachine.rerouteQuestion)
+    }
+
+    /// "New fire" tapped with a compass heading (nil: no compass, the report -> history -> ahead chain runs on Yes).
+    public func requestFire(heading: Double?) {
+        guard state == .navigate || state == .choose else { return }
+        pending = heading == nil ? .newFireNoCompass : .fireAhead(heading: heading)
+        say(NavigatorStateMachine.fireAheadQuestion)
+    }
+
+    /// "Start over" tapped on Navigate / Choose: back to Home only after a Yes.
+    public func requestStartOver() {
+        guard state != .home else { return }
+        pending = .startOver
+        say(NavigatorStateMachine.startOverQuestion)
+    }
+
+    public func confirmPending() {
+        guard let p = pending else { return }
+        pending = nil
+        switch p {
+        case .blocked: blockCurrent()
+        case .fireAhead(let h): fireAhead(heading: h)
+        case .newFireNoCompass: newFireWithoutCompass()
+        case .startOver: goHome()
+        }
+    }
+
+    public func cancelPending() {
+        guard pending != nil else { return }
+        pending = nil
+        say([Utterance(NavigatorStateMachine.okay)] + currentRepeat())
+    }
 
     public let bundle: EmberBundle
     public var config: SharedConfig { bundle.config }
@@ -120,7 +177,10 @@ public final class NavigatorStateMachine {
         arrivedRefuge = nil
         stopped = false
         fireBearing = nil
-        shelter = bundle.plan(clientId: client.id)?.shelter ?? PlanText.shelterSteps(client)
+        let planFile = bundle.plan(clientId: client.id)
+        shelter = planFile?.shelter ?? PlanText.shelterSteps(client)
+        planRefugeIds = (planFile?.choices ?? []).prefix(2).map { $0.refuge.id }
+        cardMismatch = !NavigatorStateMachine.cardMatchesPlan(cardIds: client.refugeIds, planIds: planRefugeIds)
         if client.isBedbound || profile?.shelterOnly == true {
             enterShelter(lead: nil)
             return
@@ -136,6 +196,28 @@ public final class NavigatorStateMachine {
         } else {
             say("Point the phone at the smoke and tap.")
         }
+    }
+
+    /// Refuge ids A, B of the bundle's plan file for this client (plans/<id>.json, written by the staff tool when it
+    /// plans and when it prints): the single source the printed card and the phone both follow.
+    public private(set) var planRefugeIds: [String] = []
+    /// True when the scanned card names other refuges than the plan file (an old card or a stale bundle).
+    public private(set) var cardMismatch = false
+
+    /// Card (QR refuge_ids) vs plan file: equal, or one side unknown, is a match.
+    public static func cardMatchesPlan(cardIds: [String]?, planIds: [String]) -> Bool {
+        guard let cardIds, !cardIds.isEmpty, !planIds.isEmpty else { return true }
+        return Array(cardIds.prefix(2)) == Array(planIds.prefix(2))
+    }
+
+    /// Live routing may order refuges differently from the plan file (a slightly different bearing, a newer graph).
+    /// When the plan's A is still an allowed choice it goes first, so the phone says what the card says; the router's
+    /// own order (fire side, time) is kept for everything else.
+    public static func ordered(_ choices: [Choice], planIds: [String]) -> [Choice] {
+        guard let a = planIds.first, let i = choices.firstIndex(where: { $0.refuge.id == a }), i > 0 else { return choices }
+        var out = choices
+        out.insert(out.remove(at: i), at: 0)
+        return out
     }
 
     /// Baked historical spread direction (history.json), used only when live data is stale and nothing better exists.
@@ -157,8 +239,17 @@ public final class NavigatorStateMachine {
     /// still close the wedge later. Better than the old dead end on Which Way.
     public func skipFireDirection() {
         guard state == .whichWay else { return }
-        fireBearing = historyPrior
-        planChoices()
+        if let b = dataFireBearing {                       // a stale report still beats nothing: say so
+            fireBearing = b
+            planChoices(lead: Utterance(NavigatorStateMachine.lastReport))
+        } else if let prior = historyPrior {
+            fireBearing = prior
+            let d = Geo.directionWord(prior, config.templates.directions)
+            planChoices(lead: Utterance(config.phrase("history_dir", ["direction": d]), template: "history_dir", vars: ["direction": d]))
+        } else {
+            fireBearing = nil
+            planChoices(lead: Utterance(NavigatorStateMachine.noFireInfo))
+        }
     }
 
     /// "Point": the compass bearing of the phone, pointed at the smoke.
@@ -187,15 +278,17 @@ public final class NavigatorStateMachine {
         return graph.edgeBearing(p.route.edges[i], p.route.forward[i])
     }
 
-    func planChoices() {
-        choices = route(from: originNode())
+    func planChoices(lead: Utterance? = nil) {
+        choices = NavigatorStateMachine.ordered(route(from: originNode()), planIds: planRefugeIds)
         choiceIndex = 0
         if choices.isEmpty {
             enterShelter(lead: NavigatorStateMachine.noRoute)
             return
         }
         state = .choose
-        sayChoice()
+        var u: [Utterance] = lead.map { [$0] } ?? []
+        if cardMismatch { u.append(Utterance(NavigatorStateMachine.cardMismatch)) }
+        say(u + choiceUtterances())
     }
 
     func choiceUtterances() -> [Utterance] {
@@ -301,6 +394,36 @@ public final class NavigatorStateMachine {
         rerouteAwayFromFire(bearing: b, lead: [Utterance(NavigatorStateMachine.fireAhead)])
     }
 
+    /// "New fire" tapped on a phone with no compass (the Simulator, some older phones). Never a silent no-op and
+    /// never a silent drop to shelter: the best bearing we have, said aloud so the person can correct it with
+    /// "Fire" / a new report: the fire report (fresh or stale) -> the historical prior -> straight ahead (the direction
+    /// of travel). Returns the source used, for the UI and the tests.
+    @discardableResult
+    public func newFireWithoutCompass() -> String {
+        guard state == .navigate || state == .choose else {
+            say(NavigatorStateMachine.sayAgain)
+            return "none"
+        }
+        func fireIs(_ b: Double) -> Utterance {
+            let d = Geo.directionWord(b, config.templates.directions)
+            return Utterance(config.phrase("fire_is", ["direction": d]), template: "fire_is", vars: ["direction": d])
+        }
+        if let b = dataFireBearing {
+            rerouteAwayFromFire(bearing: b, lead: [Utterance(NavigatorStateMachine.noCompassReport), fireIs(b), Utterance("Rerouting.")])
+            return "report"
+        }
+        if let b = historyPrior {
+            rerouteAwayFromFire(bearing: b, lead: [Utterance(NavigatorStateMachine.noCompassHistory), fireIs(b), Utterance("Rerouting.")])
+            return "history"
+        }
+        if let b = travelHeading ?? fireBearing {
+            rerouteAwayFromFire(bearing: b, lead: [Utterance(NavigatorStateMachine.noCompassAhead)])
+            return "ahead"
+        }
+        say("Point the phone at the smoke and tap.")
+        return "none"
+    }
+
     /// "Point" mid-route: the compass bearing of the phone, pointed at new smoke. Updates `fireBearing`, closes the
     /// wedge toward it and re-routes: "Fire is to the <direction>." + "Rerouting." + the first instruction.
     public func pointAtNewFire(bearing: Double) {
@@ -391,9 +514,15 @@ public final class NavigatorStateMachine {
 
     public func shelterNext() {
         guard state == .shelter, !shelter.steps.isEmpty else { return }
-        shelterIndex = min(shelterIndex + 1, shelter.steps.count - 1)
+        if shelterIndex >= shelter.steps.count - 1 {        // past the end: say so instead of going silent (v2, B15)
+            say([Utterance(NavigatorStateMachine.shelterLast), Utterance(shelter.steps[shelterIndex])])
+            return
+        }
+        shelterIndex += 1
         say(shelter.steps[shelterIndex])
     }
+
+    public var shelterIsLastStep: Bool { state == .shelter && !shelter.steps.isEmpty && shelterIndex >= shelter.steps.count - 1 }
 
     /// "Back": previous step; from the first step, back to Home.
     public func shelterBack() {

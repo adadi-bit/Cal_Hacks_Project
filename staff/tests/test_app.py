@@ -282,3 +282,17 @@ def test_review_shows_past_fires(app_client, sample):
     r = app_client.get("/clients/c_rosa/review")
     assert r.status_code == 200
     assert "Past fires here" in r.text and "histmap" in r.text
+
+
+def test_plan_file_is_written_when_planned_and_matches_the_card_qr(app_client, sample):
+    """Single source of truth: the bundle's plans/<id>.json exists as soon as a plan exists (not only after print),
+    and the QR's refuge_ids are its A/B, so the phone can never follow an older plan than the printed card."""
+    import base64
+    from ember_staff import card, config, db
+    row = db.get("c_rosa")
+    assert row["plan"] and db.status(row) != "printed"
+    saved = json.loads((config.bundle_dir() / "plans" / "c_rosa.json").read_text())
+    ids = [c["refuge"]["id"] for c in saved["choices"][:2]]
+    payload = card.qr_payload(row["profile"], row["plan"], row.get("selected")).split("/")[-1]
+    data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    assert data["refuge_ids"] == ids

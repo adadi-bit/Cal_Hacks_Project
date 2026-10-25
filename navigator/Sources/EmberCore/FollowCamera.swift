@@ -77,3 +77,25 @@ public struct FollowCamera: Equatable, Sendable {
         return need
     }
 }
+
+/// Direction of travel from successive GPS fixes (from engineer #1's v1): fixes closer than `minMoveM` are jitter and
+/// ignored; the bearing between real moves is low-pass filtered so the heading-up map does not twitch.
+public struct CourseEstimator: Sendable {
+    public var minMoveM = 6.0
+    public var smoothing = 0.5
+    public private(set) var heading: Double?
+    var last: (lat: Double, lon: Double)?
+
+    public init() {}
+
+    public mutating func add(lat: Double, lon: Double) {
+        guard let l = last else { last = (lat, lon); return }
+        let d = Geo.haversineM(l.lat, l.lon, lat, lon)
+        guard d >= minMoveM else { return }
+        let b = Geo.bearingDeg(l.lat, l.lon, lat, lon)
+        if let h = heading { heading = Py.mod(h + Geo.signedTurn(h, b) * smoothing, 360.0) } else { heading = b }
+        last = (lat, lon)
+    }
+
+    public mutating func reset() { heading = nil; last = nil }
+}

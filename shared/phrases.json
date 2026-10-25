@@ -22,7 +22,18 @@
     "Find a new route? Say yes to reroute.",
     "Fire ahead. Turning away from it.",
     "Fire ahead. Turning away from it. Say yes to reroute.",
-    "That code is not an Ember card. Try again."
+    "That code is not an Ember card. Try again.",
+    "No compass. Using the last fire report.",
+    "No compass. Using where past fires came from.",
+    "No compass. Treating the fire as straight ahead. Turning away from it.",
+    "This card does not match the phone's plan. Ask staff for a new card.",
+    "Using the last fire report.",
+    "No fire information. Showing the nearest safe places.",
+    "That is the last step. Stay in the room and keep the phone on.",
+    "Which way is the smoke?",
+    "Which way is the new fire?",
+    "Stop and go back to the start? Say yes to stop.",
+    "Power is back."
   ],
   "templates": {
     "fire_dir": "Fire is to the {direction}. OK?",
@@ -35,7 +46,9 @@
     "which_way": "Go {direction}.",
     "choose": "Go to {refuge}. {n} minutes.",
     "or_b": "Or {refuge}. {n} minutes.",
-    "leave_now_dev": "Leave now. {device} has {n} minutes left."
+    "leave_now_dev": "Leave now. {device} has {n} minutes left.",
+    "leave_now_dev_one": "Leave now. {device} has 1 minute left.",
+    "device_out": "{device} battery is out. Leave now."
   },
   "fragments": {
     "keep_blocks": [

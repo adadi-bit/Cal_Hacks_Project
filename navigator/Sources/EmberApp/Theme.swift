@@ -1,25 +1,30 @@
 import SwiftUI
 
-/// Near-black navy / white / steel blue: white on the card (#0D1A33) is ~17:1, navy text on steel blue (#94B5D6) ~9.5:1, both above 7:1.
-/// Green is used only on the map for the refuge area, never as the sole carrier of meaning.
+/// One palette (owner decision): off-white (#F6F3EE) / slate (#2B3440, #3A4654) / orange (#E8731A). Slate text on
+/// off-white 11.4:1, on the card (#ECE7DF) 10.2:1, secondary slate (#3F4B59) on the card 7.3:1, off-white on the slate
+/// control 8.7:1; the orange is the route (inside its black casing) and the single accent, never body text. Green is
+/// used only on the map for the refuge area, never as the sole carrier of meaning. eval/build_dashboard.py measures the
+/// `static let` lines below.
 public enum Theme {
-    public static let background = Color(red: 0.015, green: 0.035, blue: 0.09)
-    public static let text = Color.white
-    public static let dim = Color(red: 0.74, green: 0.80, blue: 0.88)
-    public static let accent = Color(red: 0.58, green: 0.71, blue: 0.84)
-    public static let onAccent = Color(red: 0.01, green: 0.03, blue: 0.08)
-    public static let card = Color(red: 0.05, green: 0.10, blue: 0.20)
-    public static let cardRaised = Color(red: 0.09, green: 0.16, blue: 0.29)
+    public static let background = Color(red: 0.965, green: 0.953, blue: 0.933)   // #F6F3EE
+    public static let text = Color(red: 0.169, green: 0.204, blue: 0.251)         // #2B3440 slate
+    public static let dim = Color(red: 0.247, green: 0.294, blue: 0.349)          // #3F4B59
+    public static let accent = Color(red: 0.227, green: 0.275, blue: 0.329)       // #3A4654 slate controls
+    public static let onAccent = Color(red: 0.965, green: 0.953, blue: 0.933)
+    public static let card = Color(red: 0.925, green: 0.906, blue: 0.875)         // #ECE7DF
+    public static let cardRaised = Color(red: 0.867, green: 0.843, blue: 0.804)   // #DDD7CD
     public static let land = Color(red: 0.16, green: 0.17, blue: 0.18)
     public static let safe = Color(red: 0.30, green: 0.80, blue: 0.45)
-    /// The route on the map: bright sky blue with a black casing, unmistakable on the veiled photo and on the drawn map.
-    public static let route = Color(red: 0.55, green: 0.85, blue: 1.0)
-    /// Dark navy veil over the satellite photo (look A "Signal"): photo still readable, overlays win.
+    /// Orange (#E8731A) inside the black casing: reads on the veiled photo and on the pale Blueprint.
+    public static let route = Color(red: 0.91, green: 0.451, blue: 0.102)
+    /// The route's casing and the dark pills: what the route orange and refuge green are measured against.
+    public static let casing = Color(red: 0.0, green: 0.0, blue: 0.0)
+    /// Dark veil over the satellite photo (look A "Signal"): photo still readable, overlays win.
     public static let mapVeil = Color(red: 0.01, green: 0.03, blue: 0.08).opacity(0.42)
-    /// Look C "Blueprint": navy land, steel roads, drawn from graph.json (offline / no photo / Settings → Map).
-    public static let mapLand = Color(red: 0.04, green: 0.08, blue: 0.16)
-    public static let mapRoadMinor = Color(red: 0.36, green: 0.46, blue: 0.58)
-    public static let mapRoadMajor = Color(red: 0.62, green: 0.72, blue: 0.84)
+    /// Look C "Blueprint": pale land, slate roads, drawn from graph.json (offline / no photo / Settings → Map).
+    public static let mapLand = Color(red: 0.89, green: 0.87, blue: 0.84)
+    public static let mapRoadMinor = Color(red: 0.55, green: 0.60, blue: 0.66)
+    public static let mapRoadMajor = Color(red: 0.23, green: 0.28, blue: 0.33)
     public static let minButtonHeight: CGFloat = 64
     /// "satellite" (default, look A) | "drawn" (look C). Settings → Map.
     public static let mapStyleKey = "ember.mapStyle"
@@ -149,6 +154,16 @@ struct InstructionText: View {
             .fixedSize(horizontal: false, vertical: true)
             .card()
             .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
+/// Explanatory line under a heading: dim, but Dynamic Type like everything else.
+struct HelpText: View {
+    let text: String
+    @ScaledMetric(relativeTo: .body) var size: CGFloat = 17
+
+    var body: some View {
+        Text(text).font(Theme.font(size)).foregroundColor(Theme.dim).fixedSize(horizontal: false, vertical: true)
     }
 }
 

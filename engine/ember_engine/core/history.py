@@ -17,6 +17,7 @@ Two uses, both offline (baked at bundle build, re-derivable from perimeters.json
 """
 import json
 import math
+from pathlib import Path
 import re
 from datetime import datetime, timezone
 
@@ -74,32 +75,67 @@ def refuge_factor(recent_count):
     return 1.0 - min(REFUGE_PENALTY_MAX, REFUGE_PENALTY_PER_FIRE * recent_count)
 
 
+FIRE_TABLE = Path(__file__).resolve().parents[1] / "data" / "norcal_fires_2017_2025.json"
+
+
+def fires():
+    """Documented 2017-2025 NorCal fires (ignition point, acres, wind, source URL), from engineer #1's table."""
+    try:
+        return json.loads(FIRE_TABLE.read_text())["fires"]
+    except (OSError, ValueError, KeyError):
+        return []
+
+
+def ignition_for(name):
+    """Table row for a FRAP perimeter name such as "Camp (2018)" / "CAMP" (the year suffix is ignored)."""
+    n = re.sub(r"\s*\(\d{4}\)\s*$", "", name or "").strip().lower()
+    for f in fires():
+        if f["name"].lower() == n and f.get("ignition"):
+            return f
+    return None
+
+
 def prior_bearing(lat, lon, historical, now_year=None):
-    """(bearing_deg, [contributing fires]) or (None, []) when no recent perimeter is near the point."""
+    """The single fire-direction prior used by the phone, the staff card and the dashboard.
+
+    For every FRAP perimeter since RECENT_YEAR that contains the location or whose (unclipped) centroid lies within
+    NEAR_M of it, the bearing from the location to the fire's documented ignition point (CAL FIRE incident pages /
+    NIFC WFIGS, `data/norcal_fires_2017_2025.json`) is weighted by log10(acres) and recency and vector-averaged.
+    A perimeter without a documented ignition point falls back to its unclipped centroid. Paradise: Camp 2018 from
+    Pulga -> ~71 deg (ENE), the Jarbo Gap wind direction. Returns (bearing_deg, [contributing fires]) or (None, []).
+    """
     now_year = now_year or datetime.now(timezone.utc).year
     vx = vy = 0.0
     used = []
     seen = set()
     for h in recent(historical):
-        # Only the unclipped centroid written by the bundle builder is meaningful; a clipped part's centroid is not.
         if not h.get("centroid") or h["fire"] in seen:
             continue
         seen.add(h["fire"])
         clon, clat = h["centroid"]
-        d = geo.haversine_m(lat, lon, clat, clon)
-        if d > NEAR_M or d < 1.0:
+        inside = bool(h.get("polygon")) and geo.point_in_polygon(lat, lon, h["polygon"])
+        if not inside and geo.haversine_m(lat, lon, clat, clon) > NEAR_M:
+            continue
+        doc = ignition_for(h["fire"])
+        if doc:
+            tlat, tlon = doc["ignition"]
+            source = "ignition"
+        else:
+            tlat, tlon, source = clat, clon, "centroid"
+        if geo.haversine_m(lat, lon, tlat, tlon) < 1.0:
             continue
         age = max(0, now_year - (year_of(h) or now_year))
-        w = math.log10(max(float(h.get("acres") or 10.0), 10.0)) * max(0.25, 1.0 - age / (RECENT_WINDOW_Y * 1.5))
-        b = math.radians(geo.bearing_deg(lat, lon, clat, clon))
+        acres = float(h.get("acres") or (doc or {}).get("acres") or 10.0)
+        w = math.log10(max(acres, 10.0)) * max(0.25, 1.0 - age / (RECENT_WINDOW_Y * 1.5))
+        bdeg = geo.bearing_deg(lat, lon, tlat, tlon)
+        b = math.radians(bdeg)
         vx += w * math.sin(b)
         vy += w * math.cos(b)
-        used.append({"fire": h["fire"], "bearing_deg": round(geo.bearing_deg(lat, lon, clat, clon), 1),
-                     "acres": h.get("acres"), "weight": round(w, 3)})
+        used.append({"fire": h["fire"], "bearing_deg": round(bdeg, 1), "acres": h.get("acres") or (doc or {}).get("acres"),
+                     "weight": round(w, 3), "from": source, "source": (doc or {}).get("source")})
     if not used or math.hypot(vx, vy) < 1e-9:
         return None, []
     return round(math.degrees(math.atan2(vx, vy)) % 360.0, 1), used
-
 
 def summary(historical, bbox):
     """history.json for the bundle: recent fires (name, date, acres), the county-centre prior and the method/sources."""
@@ -118,23 +154,33 @@ def summary(historical, bbox):
         "all_perimeters": len({h["fire"] for h in historical or []}),
         "prior_bearing_deg": bearing,
         "prior_from": used,
-        "method": "vector mean over perimeters since %d within %d km of the county centre of the bearing to each "
-                  "perimeter's area centroid, weighted by log10(acres) and recency" % (RECENT_YEAR, NEAR_M / 1000),
+        "method": "vector mean over FRAP perimeters since 2017 that contain the location or lie within 40 km of it, of the bearing to each fire's documented ignition point (CAL FIRE incident pages / NIFC WFIGS; area centroid when undocumented), weighted by log10(acres) and recency",
         "source": "CAL FIRE FRAP California Historic Fire Perimeters (fire25_1 layer), clipped to the county bbox",
     }
 
 
+def discriminates(histories):
+    """History can only rank refuges when it separates them: if every refuge in the bundle sits in the same number of
+    recent perimeters (Paradise: all 32 are inside the 2018 Camp footprint) a uniform factor changes nothing but
+    looks like a penalty. Then the burn history is reported, not scored."""
+    return len({h["recent"] for h in histories}) > 1
+
+
 def apply_to_refuges(refuges, historical):
-    """Adds `history` {fires, recent, factor} to each refuge and multiplies `score` by the factor (base score kept
-    in `score_base`). Idempotent: re-running starts from score_base."""
-    for r in refuges:
-        lon, lat = r["centroid"]
-        bh = burn_history(lat, lon, historical)
-        f = refuge_factor(bh["recent"])
+    """Adds `history` {fires, recent, factor, scored} to each refuge and multiplies `score` by the factor (base score
+    kept in `score_base`) when the history discriminates between refuges; otherwise factor 1.0 and scored=False with
+    the reason staff see on the review page. Idempotent: re-running starts from score_base."""
+    hist = [burn_history(r["centroid"][1], r["centroid"][0], historical) for r in refuges]
+    scored = discriminates(hist)
+    for r, bh in zip(refuges, hist):
+        f = refuge_factor(bh["recent"]) if scored else 1.0
         base = r.get("score_base", r["score"])
         r["score_base"] = base
         r["score"] = round(base * f, 6)
-        r["history"] = {"fires": bh["fires"], "recent": bh["recent"], "factor": round(f, 3)}
+        r["history"] = {"fires": bh["fires"], "recent": bh["recent"], "factor": round(f, 3), "scored": scored}
+        if not scored and bh["recent"]:
+            r["history"]["reason"] = ("every refuge in this bundle burned in the same %d recent fire%s; history is "
+                                      "reported, not scored" % (bh["recent"], "" if bh["recent"] == 1 else "s"))
     refuges.sort(key=lambda r: (-r["score"], r["id"]))
     return refuges
 

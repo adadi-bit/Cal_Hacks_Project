@@ -199,13 +199,23 @@ class Context:
         return best[1] if best else None
 
 
+# Spelling slips seen in OSM names of real refuges (engineer #5): a card or a voice must never teach the wrong name.
+NAME_FIXES = {"Preforming": "Performing", "Preformance": "Performance", "Elementry": "Elementary", "Comunity": "Community"}
+
+
+def clean_name(name):
+    for bad, good in NAME_FIXES.items():
+        name = name.replace(bad, good)
+    return " ".join(name.split())
+
+
 def refuge_name(kind, tags, poly_m, centroid_xy, ctx):
     if tags.get("name"):
-        return tags["name"]
+        return clean_name(tags["name"])
     if kind == "parking":
         n = ctx.nearby_name(poly_m)
         if n:
-            return f"the {n} lot"
+            return f"the {clean_name(n)} lot"
     street = ctx.nearest_street(*centroid_xy)
     word = BUILDING_WORDS.get(tags.get("building"), "building") if kind == "building" else KIND_WORDS.get(kind, kind)
     return f"the {word} on {street}" if street else f"the {word}"

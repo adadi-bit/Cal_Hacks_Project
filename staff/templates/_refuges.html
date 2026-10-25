@@ -27,7 +27,7 @@
       <tr><td>10 × f_shelter ({{ R.terms.f_shelter }})</td><td class="n">{{ c.fmt_pts(10 * R.terms.f_shelter) }}</td></tr>
       <tr><td>10 × f_water ({{ R.terms.f_water }})</td><td class="n">{{ c.fmt_pts(10 * R.terms.f_water) }}</td></tr>
       <tr><td>base_score</td><td class="n">{{ R.terms.base_score }}</td></tr>
-      {% if R.terms and R.history is defined and R.history %}<tr><td>history factor ({{ R.history.recent }} fire{{ 's' if R.history.recent != 1 }} since 2017)</td><td class="n">×{{ R.history.factor }}</td></tr>{% endif %}
+      {% if R.terms and R.history is defined and R.history %}<tr><td>history factor ({{ R.history.recent }} fire{{ 's' if R.history.recent != 1 }} since 2017)</td><td class="n">{% if R.history.scored is defined and not R.history.scored %}reported, not scored{% else %}×{{ R.history.factor }}{% endif %}</td></tr>{% endif %}
       <tr><td>vision_penalty (Claude)</td><td class="n">{{ c.fmt_pts(-R.terms.vision_penalty) if R.terms.vision_penalty else '0' }}</td></tr>
     </table>
     <p style="margin:6px 0">

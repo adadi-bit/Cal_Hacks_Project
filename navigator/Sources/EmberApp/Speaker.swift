@@ -16,7 +16,8 @@ public final class Speaker: NSObject, ObservableObject {
     @Published public private(set) var lastSource = ""
     /// "slower": cached clips play at 0.85x (time-stretched), Apple TTS slows to match.
     @Published public var slower = false
-    @Published public var volume: Float = 0.85
+    public static let normalVolume: Float = 0.85
+    @Published public var volume: Float = Speaker.normalVolume
 
     var config: SharedConfig?
     var audioDir: URL?

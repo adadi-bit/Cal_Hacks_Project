@@ -61,7 +61,7 @@ def test_apply_to_refuges_ranks_burned_refuges_down_and_is_idempotent():
     outside = {"id": "b", "centroid": [-121.50, 39.75], "score": 1.0}
     refs = history.apply_to_refuges([inside, outside], [_fire("Camp", 2018)])
     assert [r["id"] for r in refs] == ["b", "a"]
-    assert refs[1]["history"] == {"fires": ["Camp (2018)"], "recent": 1, "factor": 0.92}
+    assert refs[1]["history"] == {"fires": ["Camp (2018)"], "recent": 1, "factor": 0.92, "scored": True}
     assert refs[1]["score"] == 0.92 and refs[1]["score_base"] == 1.0
     history.apply_to_refuges(refs, [_fire("Camp", 2018)])
     assert refs[1]["score"] == 0.92
@@ -86,3 +86,30 @@ def test_plan_records_history(bundle):
     client = {"id": "t", "name": "T", "mobility": "walker", "lat": b.graph.lat[0], "lon": b.graph.lon[0]}
     p = planmod.make_plan(b, "", client)
     assert set(p["history"]) == {"prior_bearing_deg", "prior_from", "home_fires", "home_recent"}
+
+
+def test_history_is_reported_not_scored_when_every_refuge_burned_alike():
+    """Paradise: all 32 refuges sit inside the Camp (2018) footprint, so a uniform factor cannot rank anything and
+    must not move a client's refuge (the v4 card/phone mismatch). Gate: score only when history discriminates."""
+    a = {"id": "a", "centroid": [-121.61, 39.75], "score": 1.0}
+    b = {"id": "b", "centroid": [-121.605, 39.755], "score": 0.9}
+    refs = history.apply_to_refuges([a, b], [_fire("Camp", 2018)])
+    assert [r["id"] for r in refs] == ["a", "b"]
+    assert all(r["score"] == r["score_base"] for r in refs)
+    assert all(r["history"]["factor"] == 1.0 and r["history"]["scored"] is False for r in refs)
+    assert "reported, not scored" in refs[0]["history"]["reason"]
+    # a second, older-only fire on one refuge does not change the recent count -> still uniform
+    assert not history.discriminates([{"recent": 1}, {"recent": 1}])
+    assert history.discriminates([{"recent": 1}, {"recent": 0}])
+
+
+def test_prior_uses_documented_ignition_point_for_camp():
+    """One prior method for phone, card and dashboard: bearing to the documented ignition point (Pulga for Camp 2018)."""
+    from ember_engine.core import history
+    camp = {"fire": "Camp (2018)", "year": 2018, "acres": 153335.6, "centroid": [-121.52, 39.80],
+            "polygon": [[-121.8, 39.6], [-121.3, 39.6], [-121.3, 39.95], [-121.8, 39.95]]}
+    bearing, used = history.prior_bearing(39.748562, -121.615275, [camp], now_year=2026)
+    assert used and used[0]["from"] == "ignition" and used[0]["source"]
+    assert 60 <= bearing <= 80, bearing           # Pulga lies ENE of Paradise: the Jarbo Gap wind direction
+    assert history.ignition_for("CAMP")["name"] == "Camp"
+    assert history.ignition_for("Nameless (2001)") is None

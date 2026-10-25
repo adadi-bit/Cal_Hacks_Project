@@ -51,6 +51,7 @@ def flags(row, bundle=None):
             "route_fires": _inside(ch["route"].get("coords") or [], hist),
             "refuge_fires": fires, "recent": rh.get("recent", sum(1 for f in fires if (history.year_of({"fire": f}) or 0) >= history.RECENT_YEAR)),
             "factor": rh.get("factor", history.refuge_factor(rh.get("recent", 0))),
+            "scored": rh.get("scored", True),
         })
     recent_names = {h["fire"] for h in history.recent(hist)}
     both_cut = len(routes) == 2 and all(set(r["route_fires"]) & recent_names for r in routes)

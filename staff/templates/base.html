@@ -6,7 +6,7 @@
 <title>{% block title %}Ember staff{% endblock %}</title>
 <script src="/static/htmx.min.js"></script>
 <style>
-  :root { --ink:#111; --muted:#555; --line:#ccc; --bg:#fff; --soft:#f4f4f2; --red:#b00020; --amber:#8a5a00; --ok:#1b5e20; --focus:#1a4fd6; }
+  :root { --ink:#2b3440; --muted:#3f4b59; --line:#ddd7cd; --bg:#f6f3ee; --soft:#ece7df; --red:#b00020; --amber:#8a5a00; --ok:#1b5e20; --focus:#9e4208; }
   * { box-sizing: border-box; }
   body { margin:0; font: 17px/1.5 Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color:var(--ink); background:var(--bg); }
   .steps { display:flex; gap:0; margin:0 0 14px; padding:0; list-style:none; border:2px solid var(--ink); border-radius:8px; overflow:hidden; }
@@ -17,13 +17,13 @@
   .summary { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin:0 0 14px; }
   .summary a { display:block; border:2px solid var(--ink); border-radius:8px; padding:10px 12px; color:var(--ink); text-decoration:none; }
   .summary a.on { background:var(--ink); color:#fff; } .summary a b { font-size:28px; display:block; line-height:1.1; }
-  .next { border:2px solid var(--focus); border-radius:8px; padding:10px 14px; margin:0 0 14px; background:#eef3ff; font-weight:600; }
+  .next { border:2px solid var(--focus); border-radius:8px; padding:10px 14px; margin:0 0 14px; background:#fbe9dc; font-weight:600; }
   .btn, button { min-height:40px; }
   header.top { display:flex; align-items:center; gap:16px; padding:10px 20px; border-bottom:2px solid var(--ink); }
   header.top a.brand { font-weight:800; font-size:20px; color:var(--ink); text-decoration:none; }
   header.top nav { margin-left:auto; display:flex; gap:12px; align-items:center; }
   main { padding:16px 20px 60px; }
-  a { color:#0b3d91; }
+  a { color:#9e4208; }
   h1 { font-size:24px; margin:4px 0 12px; } h2 { font-size:19px; margin:18px 0 8px; } h3 { font-size:16px; margin:12px 0 6px; }
   table.grid { border-collapse:collapse; width:100%; }
   table.grid th, table.grid td { border-bottom:1px solid var(--line); padding:7px 8px; text-align:left; vertical-align:top; }

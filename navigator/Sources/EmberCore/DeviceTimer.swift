@@ -41,10 +41,29 @@ public struct DeviceTimer: Sendable, Equatable {
         return remaining(now: now).first { $0.hoursLeft < need }
     }
 
-    /// phrases.json "leave_now_dev": "Leave now. {device} has {n} minutes left." (n matches the staff pre-gen grid).
+    /// phrases.json "leave_now_dev" ("… has {n} minutes left", n on the staff pre-gen grid), "leave_now_dev_one"
+    /// ("… has 1 minute left") and "device_out" ("{device} battery is out. Leave now.") once the runtime is gone:
+    /// an expired timer must never keep saying "1 minutes left".
     public static func leaveNowSentence(_ r: Remaining, config: SharedConfig) -> String {
-        let m = Int(floor(r.hoursLeft * 60))
-        let n: Int = m <= 120 ? max(1, m) : min(500, m / 10 * 10)
+        let m = Int(floor(r.hoursLeft * 60 + 1e-6))   // 2 min left is 2, not 1.9999 -> 1
+        // Bundles synced before these templates existed fall back to the same wording.
+        let out = config.phrases.templates["device_out"] ?? "{device} battery is out. Leave now."
+        let one = config.phrases.templates["leave_now_dev_one"] ?? "Leave now. {device} has 1 minute left."
+        if m <= 0 { return SharedConfig.format(out, ["device": r.label]) }
+        if m == 1 { return SharedConfig.format(one, ["device": r.label]) }
+        let n: Int = m <= 120 ? m : min(500, m / 10 * 10)
         return config.phrase("leave_now_dev", ["device": r.label, "n": String(n)])
+    }
+
+    /// The timer belongs to one person on one bundle build. A different card, county or re-synced bundle gives a
+    /// different scope and the phone clears the timer instead of carrying it over for ever.
+    /// A county-feed outage report may start the timer only while it is not running and only if the user has not
+    /// turned "Power is out" off for this same card and bundle (the user's word beats the feed).
+    public static func feedMayArm(timerRunning: Bool, userClearedScope: String?, scope: String) -> Bool {
+        !timerRunning && userClearedScope != scope
+    }
+
+    public static func scope(clientId: String?, county: String?, builtAt: String?) -> String {
+        [clientId ?? "", county ?? "", builtAt ?? ""].joined(separator: "|")
     }
 }

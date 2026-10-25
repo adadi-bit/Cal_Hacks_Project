@@ -2,6 +2,7 @@
 
 The same context renders the review screen's left pane and the printed PDF, so what staff review is what prints.
 """
+import re
 import base64
 import io
 import json
@@ -275,6 +276,17 @@ def qr_data_uri(text):
 # Layout levels: each one tightens spacing and image sizes. Fonts never shrink. The last level moves refuge B to
 # the top of the back page (still "the same, smaller") so a 22 pt card with long routes stays one sheet.
 # Real OSM routes run to 7 steps per refuge, so the deepest levels also narrow the margin to 0.25 in.
+def _renumber(H, level):
+    """Section numbers follow print order: tight levels move "devices"/"whoever" to the front, and a card that
+    reads 1, 5, 2 confuses the responder it is written for."""
+    order = ["leave"] + [k for k, f in (("devices", "devices_front"), ("whoever", "whoever_front")) if level.get(f)]
+    order += ["noone", "cannot"] + [k for k, f in (("devices", "devices_front"), ("whoever", "whoever_front")) if not level.get(f)]
+    H = dict(H)
+    for i, k in enumerate(order, 1):
+        H[k] = f"{i}. " + re.sub(r"^\d+\.\s*", "", H[k])
+    return H
+
+
 LEVELS = [
     dict(margin=0.45, lh=1.25, h2_top=0.14, gap=5, img_a=2.4, img_b=1.7, qr=1.6, flow=False, b_on_back=False),
     dict(margin=0.4, lh=1.2, h2_top=0.1, gap=4, img_a=2.25, img_b=1.6, qr=1.5, flow=False, b_on_back=False),
@@ -283,6 +295,11 @@ LEVELS = [
     dict(margin=0.3, lh=1.1, h2_top=0.04, gap=1, img_a=1.9, img_b=1.35, qr=1.25, flow=True, b_on_back=False),
     dict(margin=0.25, lh=1.1, h2_top=0.04, gap=1, img_a=1.9, img_b=1.35, qr=1.25, flow=True, b_on_back=False),
     dict(margin=0.25, lh=1.1, h2_top=0.04, gap=1, img_a=1.9, img_b=1.35, qr=1.25, flow=True, b_on_back=True),
+    # Two real 7-step OSM routes overflow the back even at the level above (front: 300 px spare, back: 140 px over).
+    # Move "for whoever comes" to the front, next to the contacts a responder also needs.
+    dict(margin=0.25, lh=1.1, h2_top=0.04, gap=1, img_a=1.9, img_b=1.35, qr=1.25, flow=True, b_on_back=True, whoever_front=True),
+    # 22 pt cards with a 7-step route B: the devices list also moves to the front (the front still has room).
+    dict(margin=0.25, lh=1.1, h2_top=0.04, gap=1, img_a=1.9, img_b=1.35, qr=1.25, flow=True, b_on_back=True, whoever_front=True, devices_front=True),
 ]
 AID_KEPT = {"manual_chair": "Wheelchair", "power_chair": "Wheelchair", "walker": "Walker", "cane": "Cane",
             "bedbound": "Wheelchair"}
@@ -299,7 +316,8 @@ def context(row, tighten=0, for_print=False):
     lang = text.get("language")
     use_l2 = bool(lang and S.get("steps_l2") is not None and (S.get("steps_l2") or not a))
     sfx = "l2" if use_l2 else "en"
-    H = HEADINGS["es" if (use_l2 and lang == "es") else "en"]
+    L = LEVELS[min(tighten, len(LEVELS) - 1)]
+    H = _renumber(HEADINGS["es" if (use_l2 and lang == "es") else "en"], L)
 
     def sec(name, fallback):
         v = S.get(f"{name}_{sfx}")

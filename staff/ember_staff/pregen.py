@@ -220,12 +220,14 @@ def collect(row, bundle="auto", include_replans=True):
     for name, minutes, _ in routes:
         add(tp["choose"].format(refuge=name, n=minutes))
         add(tp["or_b"].format(refuge=name, n=minutes))
-    dev_minutes = list(range(1, 121)) + list(range(130, 501, 10))
+    dev_minutes = list(range(2, 121)) + list(range(130, 501, 10))   # 1 minute has its own singular template
     for d in profile.get("devices") or []:
         lbl = DEVICE_SPOKEN.get(d.get("kind"))
         if lbl and d.get("kind") != "cpap":
             for n in dev_minutes:
                 add(tp["leave_now_dev"].format(device=lbl, n=n))
+            add(tp["leave_now_dev_one"].format(device=lbl))
+            add(tp["device_out"].format(device=lbl))
 
     # fragments per street + numbers 1-500 as standalone strings
     for parts in P["fragments"].values():

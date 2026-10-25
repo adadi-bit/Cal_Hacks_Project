@@ -79,6 +79,20 @@
     </div>
   </div>
 {% endmacro %}
+{% macro devices_block() %}
+  <h2>{{ H.devices }}</h2>
+  {% if devices %}
+  <ul>
+    {% for s in devices %}<li>{{ s }}</li>{% endfor %}
+  </ul>
+  {% else %}<p>{{ H.no_devices }}</p>{% endif %}
+{% endmacro %}
+{% macro whoever_block() %}
+  <h2>{{ H.whoever }}</h2>
+  <p><b>{{ mobility_label }}.</b> <b>Transfer:</b> {{ transfer_label }}. {{ transfer_note }}
+     <b>{{ aid_label }} is kept:</b> {{ chair_location or 'not recorded' }}. <b>Pets:</b> {{ pets or 'none' }}.
+     <b>Getting in:</b> {{ entry or 'not recorded' }}. <b>Sleeps in:</b> {{ room or 'not recorded' }}.</p>
+{% endmacro %}
 <div class="sheet">
 <section class="page front">
   <div class="who">
@@ -96,6 +110,8 @@
   </ol>
   {% endif %}
   <p><b>{{ H.zone }}:</b> {{ zone or '______' }}. <b>{{ H.alert }}:</b> {{ alert_line or '_____________' }}</p>
+  {% if L.devices_front %}{{ devices_block() }}{% endif %}
+  {% if L.whoever_front %}{{ whoever_block() }}{% endif %}
 
   <h2>{{ H.noone }}</h2>
   {% if no_route %}<p class="warn">{{ H.bedbound if p.mobility == 'bedbound' else H.no_route }}</p>{% endif %}
@@ -113,17 +129,9 @@
     {% for s in shelter %}<li>{{ s }}</li>{% endfor %}
   </ol>
 
-  <h2>{{ H.devices }}</h2>
-  {% if devices %}
-  <ul>
-    {% for s in devices %}<li>{{ s }}</li>{% endfor %}
-  </ul>
-  {% else %}<p>{{ H.no_devices }}</p>{% endif %}
+  {% if not L.devices_front %}{{ devices_block() }}{% endif %}
 
-  <h2>{{ H.whoever }}</h2>
-  <p><b>{{ mobility_label }}.</b> <b>Transfer:</b> {{ transfer_label }}. {{ transfer_note }}
-     <b>{{ aid_label }} is kept:</b> {{ chair_location or 'not recorded' }}. <b>Pets:</b> {{ pets or 'none' }}.
-     <b>Getting in:</b> {{ entry or 'not recorded' }}. <b>Sleeps in:</b> {{ room or 'not recorded' }}.</p>
+  {% if not L.whoever_front %}{{ whoever_block() }}{% endif %}
 
   {% if A and not for_print %}
   {% for R in [A, B] if R %}

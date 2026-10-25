@@ -46,9 +46,12 @@ SOURCES = [
 ]
 
 # Theme.swift colours (sRGB 0..1), kept in sync by eval/test_dashboard.py
+# The one palette (owner decision): off-white / slate / orange. Must equal the `static let` lines in Theme.swift
+# (engine/tests/test_eval.py checks). The map casing is the black the route and refuge green sit in.
 THEME = {
-    "background": (0.015, 0.035, 0.09), "text": (1, 1, 1), "dim": (0.74, 0.80, 0.88), "accent": (0.58, 0.71, 0.84),
-    "onAccent": (0.01, 0.03, 0.08), "card": (0.05, 0.10, 0.20), "safe": (0.30, 0.80, 0.45), "route": (0.55, 0.85, 1.0),
+    "background": (0.965, 0.953, 0.933), "text": (0.169, 0.204, 0.251), "dim": (0.247, 0.294, 0.349),
+    "accent": (0.227, 0.275, 0.329), "onAccent": (0.965, 0.953, 0.933), "card": (0.925, 0.906, 0.875),
+    "safe": (0.30, 0.80, 0.45), "route": (0.91, 0.451, 0.102), "casing": (0.0, 0.0, 0.0),
 }
 
 
@@ -222,28 +225,46 @@ def replay(bundle, plans):
             burned_ref = {i for i in inside_refuges if along(*rpts[i]) >= reach}
             refs = [r for i, r in enumerate(bundle.refuges) if i not in burned_ref]
             cut = rerouted = home_burned = 0
-            deltas = []
+            deltas, deltas_m = [], []
+            prof = {}                                     # per mobility profile: the same counts (dashboard "by profile" table)
             for p in plans:
                 if p["no_route"]:
                     continue
+                pk = prof.setdefault(p["profile_key"], {"n": 0, "cut": 0, "rerouted": 0, "home_burned": 0, "d": [], "dm": []})
+                pk["n"] += 1
                 ch = p["choices"][0]
                 o = p["origin"]["node"]
                 if along(g.lat[o], g.lon[o]) >= reach and o in inside_nodes:
                     home_burned += 1          # the front reached the home itself: too late to start, not a routing failure
+                    pk["home_burned"] += 1
                     continue
                 if not any(ei in burned_edges for ei in ch["route"]["edges"]):
                     continue
                 cut += 1
+                pk["cut"] += 1
                 alt = router.choose(g, refs, router.Profile(p["profile_key"]), p["origin"]["node"], blocked=frozenset(burned_edges))
                 if alt:
                     rerouted += 1
+                    pk["rerouted"] += 1
                     deltas.append(alt[0]["route"]["minutes"] - ch["route"]["minutes"])
+                    pk["d"].append(deltas[-1])
+                    if alt[0]["route"].get("length_m") is not None and ch["route"].get("length_m") is not None:
+                        deltas_m.append(alt[0]["route"]["length_m"] - ch["route"]["length_m"])
+                        pk["dm"].append(deltas_m[-1])
             d = sorted(deltas)
+            dm = sorted(deltas_m)
+            by_profile = {}
+            for k, v in prof.items():
+                vd, vdm = sorted(v["d"]), sorted(v["dm"])
+                by_profile[k] = {"n": v["n"], "cut": v["cut"], "rerouted": v["rerouted"], "home_burned": v["home_burned"],
+                                 "delta_median_min": vd[len(vd) // 2] if vd else None,
+                                 "delta_median_m": round(vdm[len(vdm) // 2]) if vdm else None}
             row["hours"][str(hours)] = {"cut": cut, "cut_pct": pct(cut, len(plans)), "rerouted": rerouted, "home_burned": home_burned,
                                         "home_burned_pct": pct(home_burned, len(plans)),
                                         "rerouted_pct": pct(rerouted, cut), "delta_median_min": d[len(d) // 2] if d else None,
+                                        "delta_median_m": round(dm[len(dm) // 2]) if dm else None,
                                         "burned_edges": len(burned_edges), "burned_edges_pct": pct(len(burned_edges), len(g.edges)),
-                                        "refuges_left": len(refs)}
+                                        "refuges_left": len(refs), "by_profile": by_profile}
         row["sources"] = [u["fire"] for u in used]
         out["fires"].append(row)
     return out
@@ -261,13 +282,13 @@ def replay_map_svg(bundle, plans, w=520, h=360):
         return f"{ox + (lon - west) * k * s:.1f},{oy + (north - lat) * s:.1f}"
     recent = {x["fire"] for x in history.recent(hist)}
     parts = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plans over past perimeters">',
-             f'<rect width="{w}" height="{h}" fill="#0a1a33"/>']
+             f'<rect width="{w}" height="{h}" fill="#2b3440"/>']
     g = bundle.graph
     step = max(1, len(g.edges) // 6000)
     d = []
     for e in g.edges[::step]:
         d.append("M" + P(g.lat[e["a"]], g.lon[e["a"]]) + "L" + P(g.lat[e["b"]], g.lon[e["b"]]))
-    parts.append(f'<path d="{"".join(d)}" stroke="#2c4a73" stroke-width="0.8" fill="none"/>')
+    parts.append(f'<path d="{"".join(d)}" stroke="#5a6673" stroke-width="0.8" fill="none"/>')
     for hh in sorted(hist, key=lambda x: x.get("timestamp") or ""):
         poly = hh.get("polygon") or []
         if len(poly) < 3:
@@ -278,7 +299,7 @@ def replay_map_svg(bundle, plans, w=520, h=360):
         if p["no_route"]:
             continue
         pts = " ".join(P(c[0], c[1]) for c in p["choices"][0]["route"]["coords"])
-        parts.append(f'<polyline points="{pts}" fill="none" stroke="#8dd9ff" stroke-width="2.2" stroke-linejoin="round"/>')
+        parts.append(f'<polyline points="{pts}" fill="none" stroke="#e8731a" stroke-width="2.2" stroke-linejoin="round"/>')
     for r in bundle.refuges:
         x, y = P(r["centroid"][1], r["centroid"][0]).split(",")
         parts.append(f'<circle cx="{x}" cy="{y}" r="3.2" fill="#4ccc73"/>')
@@ -296,21 +317,21 @@ def coverage_map_svg(bundle, points, w=520, h=360):
     def P(lat, lon):
         return ox + (lon - west) * k * s, oy + (north - lat) * s
     parts = [f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Minutes to the nearest reachable refuge, manual chair">',
-             f'<rect width="{w}" height="{h}" fill="#0a1a33"/>']
+             f'<rect width="{w}" height="{h}" fill="#2b3440"/>']
     g = bundle.graph
     step = max(1, len(g.edges) // 6000)
     d = []
     for e in g.edges[::step]:
         x1, y1 = P(g.lat[e["a"]], g.lon[e["a"]]); x2, y2 = P(g.lat[e["b"]], g.lon[e["b"]])
         d.append(f"M{x1:.1f},{y1:.1f}L{x2:.1f},{y2:.1f}")
-    parts.append(f'<path d="{"".join(d)}" stroke="#2c4a73" stroke-width="0.8" fill="none"/>')
+    parts.append(f'<path d="{"".join(d)}" stroke="#5a6673" stroke-width="0.8" fill="none"/>')
     for r in bundle.refuges:
         x, y = P(r["centroid"][1], r["centroid"][0])
         parts.append(f'<rect x="{x - 4:.1f}" y="{y - 4:.1f}" width="8" height="8" fill="#4ccc73"><title>{html.escape(r["name"])}</title></rect>')
     for pt in points:
         x, y = P(pt["lat"], pt["lon"])
         m = pt["minutes"]
-        col = "#ff5a3c" if m is None else ("#8dd9ff" if m <= 20 else ("#ffd166" if m <= 45 else "#ff9f43"))
+        col = "#ff5a3c" if m is None else ("#e8731a" if m <= 20 else ("#ffd166" if m <= 45 else "#ff9f43"))
         parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="{col}" stroke="#001" stroke-width="1"><title>{"no route" if m is None else f"{m} min"}</title></circle>')
     parts.append("</svg>")
     return "".join(parts)
@@ -423,10 +444,13 @@ def bundle_readiness(bundle_dir, bundle):
 
 
 def accessibility():
-    pairs = [("text on background", "text", "background"), ("dim text on background", "dim", "background"),
-             ("text on card", "text", "card"), ("button label on button", "onAccent", "accent"),
-             ("route on map veil", "route", "background"), ("refuge green on background", "safe", "background")]
-    rows = [{"pair": n, "ratio": contrast(THEME[a], THEME[b]), "aaa": contrast(THEME[a], THEME[b]) >= 7.0} for n, a, b in pairs]
+    # Text pairs must reach AAA (7:1); the two map graphics (route inside its black casing, refuge green on the
+    # casing/veil) are non-text and must reach 4.5:1, the same bar PaletteTests.swift holds them to.
+    pairs = [("text on background", "text", "background", 7.0), ("dim text on background", "dim", "background", 7.0),
+             ("text on card", "text", "card", 7.0), ("button label on button", "onAccent", "accent", 7.0),
+             ("route on its black casing", "route", "casing", 4.5), ("refuge green on the casing", "safe", "casing", 4.5)]
+    rows = [{"pair": n, "ratio": contrast(THEME[a], THEME[b]), "aaa": contrast(THEME[a], THEME[b]) >= need, "need": need}
+            for n, a, b, need in pairs]
     screens = ["Home", "Which way", "Choose", "Navigate", "Settings"]
     shots = HERE / "screens.json"
     manual = json.loads(shots.read_text()) if shots.exists() else {s: None for s in screens}
@@ -435,9 +459,9 @@ def accessibility():
 
 
 # ------------------------------------------------------------------------------------------------------------ render
-def bar(v, maxv, colour="#8dd9ff", w=220):
+def bar(v, maxv, colour="#e8731a", w=220):
     v = v or 0
-    return (f'<svg width="{w}" height="14" aria-hidden="true"><rect width="{w}" height="14" fill="#15294a"/>'
+    return (f'<svg width="{w}" height="14" aria-hidden="true"><rect width="{w}" height="14" fill="#ddd7cd"/>'
             f'<rect width="{max(0, min(w, w * v / maxv)):.1f}" height="14" fill="{colour}"/></svg>')
 
 
@@ -446,17 +470,17 @@ def render(m):
     rq, rb, rp, au, ac, st, te, bd = (m["route_quality"], m["robustness"], m["replay"], m["audio"], m["accessibility"],
                                       m["staff"], m.get("tests"), m["bundle"])
     css = """
-    body{margin:0;background:#04091a;color:#fff;font:17px/1.5 Inter,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
-    header{padding:28px 40px 10px;border-bottom:2px solid #1d3356}h1{margin:0;font-size:34px}h2{font-size:24px;margin:0 0 10px}
-    .sub{color:#bcc9d9}main{padding:20px 40px 60px;display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:22px}
-    section{background:#0b1a36;border:1.5px solid #27406b;border-radius:14px;padding:18px 20px}section.wide{grid-column:1/-1}
-    table{border-collapse:collapse;width:100%}td,th{padding:6px 8px;border-bottom:1px solid #1d3356;text-align:left;vertical-align:top}
-    th{color:#bcc9d9;font-weight:600;font-size:15px}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
-    .big{font-size:44px;font-weight:800;line-height:1}.kpi{display:flex;gap:28px;flex-wrap:wrap;margin:6px 0 14px}.kpi div span{display:block;color:#bcc9d9;font-size:15px}
-    .ok{color:#4ccc73;font-weight:700}.bad{color:#ff5a3c;font-weight:700}.warn{color:#ffd166;font-weight:700}
-    svg.map{width:100%;height:auto;border-radius:10px;border:1px solid #27406b}.legend span{display:inline-block;margin-right:14px}
+    body{margin:0;background:#f6f3ee;color:#2b3440;font:17px/1.5 Inter,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+    header{padding:28px 40px 10px;border-bottom:2px solid #ddd7cd}h1{margin:0;font-size:34px}h2{font-size:24px;margin:0 0 10px}
+    .sub{color:#3f4b59}main{padding:20px 40px 60px;display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:22px}
+    section{background:#ece7df;border:1.5px solid #ddd7cd;border-radius:14px;padding:18px 20px}section.wide{grid-column:1/-1}
+    table{border-collapse:collapse;width:100%}td,th{padding:6px 8px;border-bottom:1px solid #ddd7cd;text-align:left;vertical-align:top}
+    th{color:#3f4b59;font-weight:600;font-size:15px}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+    .big{font-size:44px;font-weight:800;line-height:1}.kpi{display:flex;gap:28px;flex-wrap:wrap;margin:6px 0 14px}.kpi div span{display:block;color:#3f4b59;font-size:15px}
+    .ok{color:#1b5e20;font-weight:700}.bad{color:#b00020;font-weight:700}.warn{color:#8a5a00;font-weight:700}
+    svg.map{width:100%;height:auto;border-radius:10px;border:1px solid #ddd7cd}.legend span{display:inline-block;margin-right:14px}
     .dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:5px;vertical-align:middle}
-    small,.muted{color:#bcc9d9}footer{padding:16px 40px 40px;color:#bcc9d9;font-size:14px}code{color:#8dd9ff}
+    small,.muted{color:#3f4b59}footer{padding:16px 40px 40px;color:#3f4b59;font-size:14px}code{color:#9e4208}
     """
     parts = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>Ember evaluation: {e(m['county'])}</title><style>{css}</style></head><body>",
              f"<header><h1>Ember evaluation: {e(m['county'].title())}</h1><p class='sub'>Every number below is computed by <code>eval/build_dashboard.py</code> "
@@ -472,7 +496,7 @@ def render(m):
                      "".join(f"<td class='n'>{v['within'][str(t)]}%</td>" for t in rq["thresholds_min"]) + f"<td class='n'>{v['two_choices']}%</td></tr>")
     parts.append("</table></section>")
     parts.append(f"<section><h2>Refuge coverage map (manual chair)</h2>{m['coverage_svg'].replace('<svg ', '<svg class=\"map\" ', 1)}"
-                 "<p class='legend'><span><i class='dot' style='background:#8dd9ff'></i>≤20 min</span><span><i class='dot' style='background:#ffd166'></i>21–45 min</span>"
+                 "<p class='legend'><span><i class='dot' style='background:#e8731a'></i>≤20 min</span><span><i class='dot' style='background:#ffd166'></i>21–45 min</span>"
                  "<span><i class='dot' style='background:#ff9f43'></i>&gt;45 min</span><span><i class='dot' style='background:#ff5a3c'></i>no route</span><span><i class='dot' style='background:#4ccc73;border-radius:0'></i>refuge</span></p></section>")
 
     # robustness
@@ -492,8 +516,28 @@ def render(m):
                          f"<td>{'final perimeter' if hk == 'final' else hk + ' h'}</td><td class='n'>{hv['burned_edges_pct']}%</td><td class='n'>{hv['home_burned']} ({hv['home_burned_pct']}%)</td><td class='n'>{hv['cut']} ({hv['cut_pct']}%)</td>"
                          f"<td class='n {'ok' if hv['rerouted'] == hv['cut'] else ('warn' if hv['rerouted'] else 'bad')}'>{hv['rerouted']}/{hv['cut']}</td><td class='n'>{'' if hv['delta_median_min'] is None else f'+{hv['delta_median_min']} min'}</td><td class='n'>{hv['refuges_left']}</td></tr>")
             first = False
-    parts.append(f"</table><p class='muted'>Honest reading: the Camp Fire's final perimeter contains all of Paradise, so at the end every home, route and in-town refuge is inside it; the hour columns show how the plans and the reroute logic hold up while the front crosses town. The front bearing is the engine's centroid proxy ({', '.join(str(round(f['front_from_deg'])) + '° for ' + f['fire'] for f in rp['fires'])}); the documented Camp Fire wind was north-easterly. Refuges outside the perimeter would need a wider bundle than this 10 km one.</p></div>"
-                 f"<div>{m['replay_svg'].replace('<svg ', '<svg class=\"map\" ', 1)}<p class='legend'><span><i class='dot' style='background:#ff5a3c'></i>perimeter since {history.RECENT_YEAR}</span><span><i class='dot' style='background:#8a7a66'></i>older perimeter</span><span><i class='dot' style='background:#8dd9ff'></i>primary routes</span><span><i class='dot' style='background:#4ccc73'></i>refuges</span></p></div></div></section>")
+    parts.append("</table>")
+    # by mobility profile at hours 1 / 2 / 3: who gets cut, who can still be rerouted, and what it costs them
+    hour_keys = [k for k in ("1", "2", "3") if any(k in f["hours"] for f in rp["fires"])]
+    if hour_keys:
+        parts.append("<h3>By mobility profile</h3><table><tr><th>Fire</th><th>Profile</th>" + "".join(
+            f"<th class='n'>{k} h cut</th><th class='n'>{k} h rerouted</th><th class='n'>{k} h Δ</th>" for k in hour_keys) + "</tr>")
+        for f in rp["fires"]:
+            profs = sorted({pk for k in hour_keys for pk in (f["hours"].get(k) or {}).get("by_profile", {})})
+            for pk in profs:
+                cells = []
+                for k in hour_keys:
+                    v = ((f["hours"].get(k) or {}).get("by_profile") or {}).get(pk)
+                    if not v:
+                        cells.append("<td class='n'>–</td><td class='n'>–</td><td class='n'>–</td>")
+                        continue
+                    dl = "" if v["delta_median_min"] is None else f"+{v['delta_median_min']} min" + ("" if v["delta_median_m"] is None else f" / +{v['delta_median_m']:,} m")
+                    cls = "ok" if v["rerouted"] == v["cut"] else ("warn" if v["rerouted"] else "bad")
+                    cells.append(f"<td class='n'>{v['cut']}/{v['n']}</td><td class='n {cls}'>{v['rerouted']}/{v['cut']}</td><td class='n'>{dl}</td>")
+                parts.append(f"<tr><td>{e(f['fire'])}</td><td>{e(pk.replace('_', ' '))}</td>{''.join(cells)}</tr>")
+        parts.append("</table><p class='muted'>Δ = median extra minutes / metres for the plans that could be rerouted; a walker's reroute costs more than a power chair's because the detours are the same streets at a slower pace.</p>")
+    parts.append(f"<p class='muted'>Honest reading: the Camp Fire's final perimeter contains all of Paradise, so at the end every home, route and in-town refuge is inside it; the hour columns show how the plans and the reroute logic hold up while the front crosses town. The front bearing is the engine's centroid proxy ({', '.join(str(round(f['front_from_deg'])) + '° for ' + f['fire'] for f in rp['fires'])}); the documented Camp Fire wind was north-easterly. Refuges outside the perimeter would need a wider bundle than this 10 km one.</p></div>"
+                 f"<div>{m['replay_svg'].replace('<svg ', '<svg class=\"map\" ', 1)}<p class='legend'><span><i class='dot' style='background:#ff5a3c'></i>perimeter since {history.RECENT_YEAR}</span><span><i class='dot' style='background:#8a7a66'></i>older perimeter</span><span><i class='dot' style='background:#e8731a'></i>primary routes</span><span><i class='dot' style='background:#4ccc73'></i>refuges</span></p></div></div></section>")
 
     # audio + accessibility
     parts.append(f"<section><h2>Audio coverage (Cartesia Henry)</h2><div class='kpi'><div><b class='big'>{au['recorded_pct'] if au['recorded_pct'] is not None else 0}%</b><span>of {au['clip_keys']} sayable clips pre-recorded for {au['clients']} clients</span></div>"

@@ -47,6 +47,11 @@ public final class AppModel: ObservableObject {
     private var leaveNowSpoken = false
     private var feed: ApifyFeed?
     private var lastFeedFetch: Date?
+    private var fireFeed: FireFeed?
+    private var lastFireFetch: Date?
+    /// The newest successful keyless fire check (NIFC WFIGS + NWS); nil = the bundle snapshot is all we have.
+    @Published public private(set) var liveFire: FireFeed.Check?
+    @Published public private(set) var fireCheckFailed = false
     let store = BundleStore()
     private lazy var profileStore = ProfileStore(support: store.support)
 
@@ -56,6 +61,8 @@ public final class AppModel: ObservableObject {
         let t = UserDefaults.standard.double(forKey: "powerOutSince")
         powerOutSince = t > 0 ? Date(timeIntervalSince1970: t) : nil
     }
+
+    static let powerScopeKey = "powerOutScope"
 
     // MARK: launch
 
@@ -91,6 +98,7 @@ public final class AppModel: ObservableObject {
             processor = VoiceCommandProcessor(matcher: IntentMatcher(b.config.intents), config: b.config)
             loadError = nil
             configureFeed()
+            configureFireFeed()
         } catch {
             loadError = "\(error)"
         }
@@ -127,7 +135,53 @@ public final class AppModel: ObservableObject {
 
     func networkChanged(_ up: Bool) {
         speaker.online = up
-        if up { speaker.cartesia?.open(); refreshFeed(force: true) } else { speaker.cartesia?.close() }
+        if up { speaker.cartesia?.open(); refreshFeed(force: true); refreshFire(force: true) } else { speaker.cartesia?.close() }
+    }
+
+    // MARK: live fire data (keyless; the bundle stays the offline truth)
+
+    var fireCacheURL: URL? { bundle.map { store.support.appendingPathComponent("fire-\($0.county).json") } }
+
+    func configureFireFeed() {
+        liveFire = nil; lastFireFetch = nil; fireCheckFailed = false
+        guard let b = bundle, let bbox = b.manifest?.bbox, bbox.count == 4 else { fireFeed = nil; return }
+        fireFeed = FireFeed(bbox: bbox, windSource: b.wind?.source)
+        if let u = fireCacheURL, let d = try? Data(contentsOf: u), let c = try? JSONDecoder().decode(FireFeed.Check.self, from: d) {
+            applyFireCheck(c, cache: false)
+        }
+    }
+
+    func refreshFire(force: Bool) {
+        guard let fireFeed, voice.online else { return }
+        if !force, let t = lastFireFetch, Date().timeIntervalSince(t) < 60 { return }
+        lastFireFetch = Date()
+        Task { @MainActor in
+            if let c = await fireFeed.fetch() { self.applyFireCheck(c, cache: true) } else { self.fireCheckFailed = true }
+        }
+    }
+
+    /// Newer than what the phone has -> the state machine's fire inputs change; older (a stale cache) is ignored.
+    func applyFireCheck(_ c: FireFeed.Check, cache: Bool) {
+        fireCheckFailed = false
+        let have = liveFire?.checkedAt ?? bundle?.fireDataTimestamp ?? .distantPast
+        guard c.checkedAt >= have else { return }
+        liveFire = c
+        machine?.fireData = FireData(perimeter: c.perimeter, wind: c.wind ?? bundle?.wind)
+        if cache, let u = fireCacheURL, let d = try? JSONEncoder().encode(c) { try? d.write(to: u, options: .atomic) }
+        sync()
+    }
+
+    /// Newest fire inputs the phone has (live check or bundle snapshot).
+    public var fireDataTimestamp: Date? { machine?.fireData.timestamp ?? bundle?.fireDataTimestamp }
+
+    public var fireStatusText: String {
+        FireFeed.statusText(dataAge: fireDataTimestamp.map { Date().timeIntervalSince($0) }, stale: fireIsStale, online: voice.online,
+                            lastCheck: liveFire?.checkedAt, checkFailed: fireCheckFailed, now: Date())
+    }
+
+    /// "Map and voice from Oct 24": when staff last synced this bundle.
+    public var bundleBuiltText: String? {
+        Timestamps.dayText(bundle?.manifest?.builtAt).map { "Map and voice from \($0)" }
     }
 
     // MARK: profiles
@@ -141,6 +195,7 @@ public final class AppModel: ObservableObject {
             profiles.append(p)
             profileStore.save(profiles)
             selectedId = p.id
+            checkPowerScope()
             notice = "Added \(p.name)."
             if let b = bundle, let c = p.county, c != b.county { notice = "Added \(p.name). The map on this phone is for \(b.county), not \(c)." }
             speaker.configure(bundle: bundle, clientId: selectedId)
@@ -162,6 +217,7 @@ public final class AppModel: ObservableObject {
 
     public func select(_ id: String) {
         selectedId = id
+        checkPowerScope()
         speaker.configure(bundle: bundle, clientId: id)
         speaker.voiceId = selected?.voice?.voiceId ?? KeychainStore.get(.cartesiaVoiceId)
     }
@@ -173,14 +229,48 @@ public final class AppModel: ObservableObject {
     public func setPowerOut(_ on: Bool, at date: Date = Date()) {
         powerOutSince = on ? (powerOutSince ?? date) : nil
         UserDefaults.standard.set(powerOutSince?.timeIntervalSince1970 ?? 0, forKey: "powerOutSince")
+        UserDefaults.standard.set(on ? powerScope : nil, forKey: AppModel.powerScopeKey)
+        // Once the user says the power is back, no feed report re-arms the timer for this card and bundle; only the
+        // user (or a new card / bundle) can. Stored by scope so a new card starts fresh.
+        UserDefaults.standard.set(on ? nil : powerScope, forKey: AppModel.powerUserClearedKey)
         leaveNowSpoken = false
         periodic()
+    }
+
+    static let powerUserClearedKey = "powerUserCleared"
+
+    /// May a county-feed outage report start the timer? Not while the timer runs, and never after the user cleared
+    /// it for this card and bundle.
+    var feedMayArmPower: Bool {
+        DeviceTimer.feedMayArm(timerRunning: powerIsOut,
+                               userClearedScope: UserDefaults.standard.string(forKey: AppModel.powerUserClearedKey),
+                               scope: powerScope)
+    }
+
+    /// "Power is back": clears the timer and the Leave-now banner, and says so.
+    public func powerBack() {
+        setPowerOut(false)
+        speaker.speak([Utterance("Power is back.")])
+    }
+
+    var powerScope: String { DeviceTimer.scope(clientId: selectedId, county: bundle?.county, builtAt: bundle?.manifest?.builtAt) }
+
+    /// A timer started for another card or another bundle build does not carry over (field report: "Oxygen has 1
+    /// minute left" pinned for hours after testing with a different bundle).
+    func checkPowerScope() {
+        guard powerIsOut, UserDefaults.standard.string(forKey: AppModel.powerScopeKey) != powerScope else { return }
+        powerOutSince = nil
+        UserDefaults.standard.set(0, forKey: "powerOutSince")
+        UserDefaults.standard.removeObject(forKey: AppModel.powerScopeKey)
+        UserDefaults.standard.removeObject(forKey: AppModel.powerUserClearedKey)
+        leaveNow = nil
+        leaveNowSpoken = false
     }
 
     // MARK: derived for views
 
     public var fireAgeText: String {
-        guard let t = bundle?.fireDataTimestamp else { return "Fire data: none on this phone" }
+        guard let t = fireDataTimestamp else { return "Fire data: none on this phone" }
         return "Fire data from \(Timestamps.ageText(Date().timeIntervalSince(t)))"
     }
 
@@ -205,31 +295,47 @@ public final class AppModel: ObservableObject {
         speaker.configure(bundle: bundle, clientId: c.id)
         if let l = location.location, usable(l) { m.setPosition(lat: l.coordinate.latitude, lon: l.coordinate.longitude) }
         refreshFeed(force: false)
+        // A fresh session starts at normal pace and volume ("slower"/"louder" used to stick for ever; v2, B11).
+        speaker.slower = false
+        speaker.volume = Speaker.normalVolume
+        course.reset()
         do { try m.start(client: c, caregiver: caregiverMode) } catch { notice = "\(error)" }
         sync()
     }
+
+    /// "Louder" button (v2, B8): full volume, then the instruction again. Voice "louder" takes the same path.
+    public func louder() {
+        speaker.volume = 1.0
+        machine?.handle(.louder)
+        sync()
+    }
+
+    /// Asks the direction aloud when the compass cannot answer (v1's direction picker is shown meanwhile).
+    public func askDirection(newFire: Bool) {
+        speaker.speak([Utterance(newFire ? NavigatorStateMachine.whichWayNewFire : NavigatorStateMachine.whichWaySmoke)])
+    }
+
+    /// A direction tapped on the picker: the smoke on Which way, or a new fire mid-route.
+    public func pickedSmokeDirection(_ bearing: Double) {
+        guard let m = machine else { return }
+        if m.state == .whichWay { m.point(bearing: bearing) } else { m.pointAtNewFire(bearing: bearing) }
+        sync()
+    }
+
+    /// New fire, no compass and the person cannot tell where: report -> history -> straight ahead, said aloud.
+    public func newFireUnknownDirection() { machine?.newFireWithoutCompass(); sync() }
 
     public func confirmFire() { machine?.confirmFire(); sync() }
     public func skipFireDirection() { machine?.skipFireDirection(); sync() }
 
     public func pointAtSmoke() {
-        guard let h = compass.heading else {
-            speaker.speak([Utterance("Point the phone at the smoke and tap.")])
-            return
-        }
+        guard let h = compass.heading else { return }          // no compass: the view shows the direction picker
         machine?.point(bearing: h)
         sync()
     }
 
     /// Navigate/Choose "Point": the phone is pointed at new smoke; the fire bearing is updated and the route turns away.
-    public func pointAtNewFire() {
-        guard let h = compass.heading else {
-            speaker.speak([Utterance("Point the phone at the smoke and tap.")])
-            return
-        }
-        machine?.pointAtNewFire(bearing: h)
-        sync()
-    }
+    public func pointAtNewFire() { newFireTapped() }
 
     /// "Fire ahead" without a bearing: the fire is where the user is heading (compass, else the route edge).
     public func fireAhead() { machine?.fireAhead(heading: compass.heading); sync() }
@@ -237,11 +343,23 @@ public final class AppModel: ObservableObject {
     public func go() { machine?.go(); sync() }
     public func other() { machine?.other(); sync() }
     public func cantMove() { machine?.cantMove(); sync() }
-    public func blocked() { machine?.blockCurrent(); sync() }
+    public func blocked() { machine?.requestBlocked(); sync() }
+    public func confirmPending() { machine?.confirmPending(); sync() }
+    public func cancelPending() { machine?.cancelPending(); sync() }
+    public func startOver() { machine?.requestStartOver(); sync() }
+    /// "New fire" tapped: with a compass the phone's heading is the fire's direction; asks before rerouting.
+    public func newFireTapped() { machine?.requestFire(heading: compass.heading); sync() }
     public func repeatInstruction() { machine?.repeatCurrent(); sync() }
     public func shelterNext() { machine?.shelterNext(); sync() }
     public func shelterBack() { machine?.shelterBack(); sync() }
+    /// Settings sheet flag lives here so a font/colour change (which rebuilds the screens) never closes Settings.
+    @Published public var settingsShown = false
+
     public func done() { machine?.done(); speaker.stop(); sync() }
+    /// Back to Home from any screen (Which way "Back", Navigate "Start over"): stops speech and guidance.
+    public func goHome() { leaveNavigateCamera(); machine?.goHome(); speaker.stop(); sync() }
+    /// Re-check after a confirmed Start over: the camera and timers go with the route.
+    func syncAfterPending() { if state == .home { leaveNavigateCamera() } }
 
     public func micTapped() {
         voice.toggle { [weak self] text in
@@ -282,11 +400,13 @@ public final class AppModel: ObservableObject {
     func gotFix(_ l: CLLocation) {
         guard let m = machine, usable(l) else { return }
         m.updatePosition(lat: l.coordinate.latitude, lon: l.coordinate.longitude)
+        course.add(lat: l.coordinate.latitude, lon: l.coordinate.longitude)
         sync()
     }
 
     func periodic() {
         let now = Date()
+        checkPowerScope()
         if let c = selected {
             // Before Start there is no live route: use the stamped plan's route A time if the bundle has it.
             let routeS = machine?.remainingRouteTimeS ?? bundle?.plan(clientId: c.id)?.choices.first?.route.timeS ?? 0
@@ -306,6 +426,9 @@ public final class AppModel: ObservableObject {
         }
         if voice.online, lastFeedFetch.map({ now.timeIntervalSince($0) > AppModel.feedRefreshS }) ?? true {
             refreshFeed(force: false)
+        }
+        if voice.online, lastFireFetch.map({ now.timeIntervalSince($0) > AppModel.feedRefreshS }) ?? true {
+            refreshFire(force: false)
         }
         tick += 1
     }
@@ -330,7 +453,7 @@ public final class AppModel: ObservableObject {
         if m.state == .navigate, let p = m.progress, !m.feedBlocked.isDisjoint(with: p.route.edges) {
             m.replan(origin: nil)
         }
-        if let o = ApifyFeed.outage(s, zip: selected?.zip), !powerIsOut {
+        if let o = ApifyFeed.outage(s, zip: selected?.zip), feedMayArmPower {
             setPowerOut(true, at: r.fetchedAt ?? Date())
             feedNote = "Power outage reported for \(o.area)."
         }
@@ -343,8 +466,19 @@ public final class AppModel: ObservableObject {
     // MARK: Navigate map camera
 
     static let followAnimateS = 0.8
+    /// Width / height of the Navigate map as laid out, so the 1 s overview fits the whole route in a wide, short map.
+    @Published public var mapAspect: Double = 1.0 {
+        didSet {   // the size arrives after the overview was framed: re-frame it while still in the 1 s overview
+            if state == .navigate, follow.mode == .overview, cameraAnimation == nil, abs(mapAspect - oldValue) > 0.01 {
+                mapViewport = overviewViewport()
+            }
+        }
+    }
 
-    var followHeading: Double? { compass.heading ?? machine?.travelHeading }
+    /// Up on the follow map: the compass, else the direction of travel from GPS fixes (v1's CourseEstimator), else
+    /// the bearing of the current route edge.
+    var followHeading: Double? { compass.heading ?? course.heading ?? machine?.travelHeading }
+    var course = CourseEstimator()
 
     func followTarget() -> FollowCamera.Viewport? {
         guard let m = machine else { return nil }
@@ -360,7 +494,7 @@ public final class AppModel: ObservableObject {
         var s = pts[0].lat, n = pts[0].lat, w = pts[0].lon, e = pts[0].lon
         for q in pts { s = min(s, q.lat); n = max(n, q.lat); w = min(w, q.lon); e = max(e, q.lon) }
         return FollowCamera.Viewport(lat: (s + n) / 2, lon: (w + e) / 2,
-                                     spanM: FollowCamera.overviewSpanM(points: pts, aspect: 1.0), rotationDeg: 0)
+                                     spanM: FollowCamera.overviewSpanM(points: pts, aspect: mapAspect), rotationDeg: 0)
     }
 
     func enterNavigateCamera() {
